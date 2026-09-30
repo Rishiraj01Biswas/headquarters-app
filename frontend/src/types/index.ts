@@ -1,4 +1,17 @@
-export type LifeBucket = 'Career' | 'Health' | 'Personal' | 'Finance' | 'Relationships';
+export type LifeBucket = 
+  | 'Career' 
+  | 'Health' 
+  | 'Personal' 
+  | 'Finance' 
+  | 'Relationships'
+  | 'Job'
+  | 'Business'
+  | 'Fitness'
+  | 'Family & Friends'
+  | 'Study'
+  | 'Admin';
+
+export type CognitiveLoad = 'Flow State' | 'Quick' | 'Easy' | 'Personal';
 
 export type EisenhowerQuadrant = 'do_first' | 'schedule' | 'delegate' | 'eliminate';
 
@@ -10,6 +23,7 @@ export interface Task {
   isUrgent: boolean;
   isImportant: boolean;
   quadrant: EisenhowerQuadrant;
+  cognitiveLoad?: CognitiveLoad;
   isFrog: boolean;
   movesTheNeedle: boolean;
   completed: boolean;

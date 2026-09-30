@@ -9,6 +9,7 @@ interface AppState {
   addTask: (task: Omit<Task, 'id' | 'quadrant' | 'completed' | 'timeSpentMinutes'>) => void;
   toggleTask: (id: string) => void;
   deleteTask: (id: string) => void;
+  updateTask: (id: string, updates: Partial<Task>) => void;
   moveTaskQuadrant: (id: string, quadrant: EisenhowerQuadrant) => void;
   logTime: (id: string, minutes: number) => void;
   addProject: (title: string, bucket: Project['bucket'], bottlenecks?: string[], notes?: string[]) => void;
@@ -98,7 +99,11 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           tasks: state.tasks.filter((t) => t.id !== id),
         })),
-      moveTaskQuadrant: (id, quadrant) =>
+
+      updateTask: (id, updates) =>
+        set((state) => ({
+          tasks: state.tasks.map((t) => (t.id === id ? { ...t, ...updates } : t)),
+        })),      moveTaskQuadrant: (id, quadrant) =>
         set((state) => ({
           tasks: state.tasks.map((t) =>
             t.id === id
