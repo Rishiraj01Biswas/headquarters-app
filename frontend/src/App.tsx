@@ -1,14 +1,15 @@
+import { TaskEngine } from "./components/TaskEngine";
 import { ProjectModal } from "./components/ProjectModal";
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from './store/useAppStore';
 import { 
-  CheckCircle2, Circle, Flame, Target, Calendar as CalendarIcon, 
-  Users, Trash2, Play, Square, Plus, BookOpen, 
+  Circle, Flame, Calendar as CalendarIcon, 
+  Trash2, Square, Plus, BookOpen, 
   X, Check, AlertTriangle, TrendingUp, Clock, Filter, Layers, Zap,
   FileText, ArrowRight, FolderPlus, Sun, Download, Upload, Moon, ChevronLeft, ChevronRight,
   History, Compass
 } from 'lucide-react';
-import type { LifeBucket, Project, EisenhowerQuadrant } from './types';
+import type { LifeBucket, Project } from './types';
 import { 
   format, addDays, isSameDay, startOfMonth, endOfMonth, 
   startOfWeek, endOfWeek, eachDayOfInterval, addMonths, subMonths,
@@ -20,7 +21,8 @@ const STATES_OF_MIND = ['Deep Work', 'Flow State', 'Admin / Logistics', 'Creativ
 
 export default function App() {
   const { 
-    tasks, projects, notes, toggleTask, addTask, deleteTask, 
+    tasks, projects, notes, toggleTask, addTask, deleteTask,
+    updateTask, 
     logTime, addProject, addNote, deleteNote, moveTaskQuadrant 
   } = useAppStore();
   
@@ -187,11 +189,7 @@ export default function App() {
   const completedTasks = tasks.filter((t) => t.completed);
   const needleMoversCompleted = completedTasks.filter((t) => t.movesTheNeedle);
   
-  const q1 = filteredTasks.filter((t) => t.quadrant === 'do_first');
-  const q2 = filteredTasks.filter((t) => t.quadrant === 'schedule');
-  const q3 = filteredTasks.filter((t) => t.quadrant === 'delegate');
-  const q4 = filteredTasks.filter((t) => t.quadrant === 'eliminate');
-
+        
   const totalMinutesTracked = tasks.reduce((sum, t) => sum + (t.timeSpentMinutes || 0), 0);
   const minutesByBucket = (['Career', 'Health', 'Personal', 'Finance', 'Relationships'] as LifeBucket[]).map(b => ({
     bucket: b,
@@ -667,47 +665,19 @@ export default function App() {
           </section>
         </div>
 
-        {/* Right Columns: Eisenhower Matrix */}
-        <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className={`border border-amber-500/30 rounded-xl p-5 ${cardClasses}`}>
-            <div className="flex items-center justify-between mb-4 border-b border-neutral-200 dark:border-neutral-800 pb-2">
-              <div className="flex items-center gap-2 text-amber-600 font-semibold text-sm">
-                <Target className="w-4 h-4" /> Urgent & Important (Do First)
-              </div>
-              <span className="text-xs text-neutral-400">{q1.length} tasks</span>
-            </div>
-            <TaskList items={q1} onToggle={toggleTask} onDelete={deleteTask} onMove={moveTaskQuadrant} activeTaskId={activeTaskId} onStartTimer={setActiveTaskId} itemClasses={itemClasses} />
-          </div>
-
-          <div className={`border border-blue-500/30 rounded-xl p-5 ${cardClasses}`}>
-            <div className="flex items-center justify-between mb-4 border-b border-neutral-200 dark:border-neutral-800 pb-2">
-              <div className="flex items-center gap-2 text-blue-600 font-semibold text-sm">
-                <CalendarIcon className="w-4 h-4" /> Not Urgent & Important (Schedule)
-              </div>
-              <span className="text-xs text-neutral-400">{q2.length} tasks</span>
-            </div>
-            <TaskList items={q2} onToggle={toggleTask} onDelete={deleteTask} onMove={moveTaskQuadrant} activeTaskId={activeTaskId} onStartTimer={setActiveTaskId} itemClasses={itemClasses} />
-          </div>
-
-          <div className={`border border-purple-500/30 rounded-xl p-5 ${cardClasses}`}>
-            <div className="flex items-center justify-between mb-4 border-b border-neutral-200 dark:border-neutral-800 pb-2">
-              <div className="flex items-center gap-2 text-purple-600 font-semibold text-sm">
-                <Users className="w-4 h-4" /> Urgent & Not Important (Delegate)
-              </div>
-              <span className="text-xs text-neutral-400">{q3.length} tasks</span>
-            </div>
-            <TaskList items={q3} onToggle={toggleTask} onDelete={deleteTask} onMove={moveTaskQuadrant} activeTaskId={activeTaskId} onStartTimer={setActiveTaskId} itemClasses={itemClasses} />
-          </div>
-
-          <div className={`border border-neutral-200 dark:border-neutral-800 rounded-xl p-5 ${cardClasses}`}>
-            <div className="flex items-center justify-between mb-4 border-b border-neutral-200 dark:border-neutral-800 pb-2">
-              <div className="flex items-center gap-2 text-neutral-400 font-semibold text-sm">
-                <Trash2 className="w-4 h-4" /> Not Urgent & Not Important (Don't Do)
-              </div>
-              <span className="text-xs text-neutral-400">{q4.length} tasks</span>
-            </div>
-            <TaskList items={q4} onToggle={toggleTask} onDelete={deleteTask} onMove={moveTaskQuadrant} activeTaskId={activeTaskId} onStartTimer={setActiveTaskId} itemClasses={itemClasses} />
-          </div>
+        {/* Right Columns: Smart Task Engine */}
+        <div className="lg:col-span-3">
+          <TaskEngine
+            tasks={filteredTasks}
+            onToggle={toggleTask}
+            onDelete={deleteTask}
+            onMove={moveTaskQuadrant}
+            onUpdateTask={updateTask}
+            activeTaskId={activeTaskId}
+            onStartTimer={setActiveTaskId}
+            itemClasses={itemClasses}
+            cardClasses={cardClasses}
+          />
         </div>
       </div>
 
@@ -987,88 +957,6 @@ export default function App() {
           </form>
         </div>
       )}
-    </div>
-  );
-}
-
-function TaskList({ 
-  items, 
-  onToggle, 
-  onDelete, 
-  onMove, 
-  activeTaskId, 
-  onStartTimer,
-  itemClasses
-}: { 
-  items: any[]; 
-  onToggle: (id: string) => void;
-  onDelete: (id: string) => void;
-  onMove: (id: string, q: EisenhowerQuadrant) => void;
-  activeTaskId: string | null;
-  onStartTimer: (id: string) => void;
-  itemClasses: string;
-}) {
-  if (items.length === 0) {
-    return <p className="text-neutral-400 text-xs italic py-2">No tasks in this quadrant.</p>;
-  }
-
-  return (
-    <div className="space-y-2">
-      {items.map((task) => (
-        <div 
-          key={task.id} 
-          className={`p-3 border rounded-lg flex items-center justify-between gap-3 transition-colors group ${itemClasses}`}
-        >
-          <div className="flex items-center gap-3 overflow-hidden">
-            <button onClick={() => onToggle(task.id)} className="text-neutral-400 hover:text-emerald-500 flex-shrink-0">
-              {task.completed ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Circle className="w-4 h-4" />}
-            </button>
-            <div className="truncate">
-              <p className={`text-sm truncate ${task.completed ? 'line-through text-neutral-400' : ''}`}>
-                {task.title}
-              </p>
-              <div className="flex gap-2 items-center mt-0.5">
-                <span className="text-[10px] text-neutral-400 font-mono uppercase">{task.bucket}</span>
-                {task.movesTheNeedle && (
-                  <span className="text-[9px] bg-amber-500/10 text-amber-600 px-1.5 py-0.2 rounded font-medium">80/20</span>
-                )}
-                {task.timeSpentMinutes > 0 && (
-                  <span className="text-[10px] text-neutral-400 font-mono">{task.timeSpentMinutes}m logged</span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <select
-              value={task.quadrant}
-              onChange={(e) => onMove(task.id, e.target.value as EisenhowerQuadrant)}
-              className="bg-neutral-100 dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-[10px] text-neutral-500 rounded px-1.5 py-1 focus:outline-none"
-              title="Reshuffle Quadrant"
-            >
-              <option value="do_first">Do First</option>
-              <option value="schedule">Schedule</option>
-              <option value="delegate">Delegate</option>
-              <option value="eliminate">Don't Do</option>
-            </select>
-
-            <button 
-              onClick={() => onStartTimer(task.id)}
-              className={`p-1.5 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700/50 transition-colors ${activeTaskId === task.id ? 'text-emerald-500' : 'text-neutral-400'}`}
-              title="Start Focus Timer"
-            >
-              <Play className="w-3.5 h-3.5" />
-            </button>
-            <button 
-              onClick={() => onDelete(task.id)}
-              className="p-1.5 rounded opacity-0 group-hover:opacity-100 text-neutral-400 hover:text-rose-500 transition-all"
-              title="Delete Task"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
