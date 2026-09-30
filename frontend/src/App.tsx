@@ -9,7 +9,7 @@ import {
   FileText, ArrowRight, FolderPlus, Sun, Download, Upload, Moon, ChevronLeft, ChevronRight,
   History, Compass
 } from 'lucide-react';
-import type { LifeBucket, Project } from './types';
+import type { LifeBucket, CognitiveLoad, Project } from './types';
 import { 
   format, addDays, isSameDay, startOfMonth, endOfMonth, 
   startOfWeek, endOfWeek, eachDayOfInterval, addMonths, subMonths,
@@ -58,6 +58,7 @@ export default function App() {
   const [title, setTitle] = useState('');
   const [bucket, setBucket] = useState<LifeBucket>('Career');
   const [projectId, setProjectId] = useState<string>('');
+  const [cognitiveLoad, setCognitiveLoad] = useState<CognitiveLoad>('Quick');
   const [isUrgent, setIsUrgent] = useState(false);
   const [isImportant, setIsImportant] = useState(false);
   const [isFrog, setIsFrog] = useState(false);
@@ -134,6 +135,7 @@ export default function App() {
     });
     setTitle('');
     setProjectId('');
+    setCognitiveLoad('Quick');
     setIsUrgent(false);
     setIsImportant(false);
     setIsFrog(false);
@@ -930,6 +932,20 @@ export default function App() {
                 </select>
               </div>
             </div>
+
+        <div>
+          <label className="text-xs text-neutral-400 block mb-1">Cognitive Load</label>
+          <select
+            value={cognitiveLoad}
+            onChange={(e) => setCognitiveLoad(e.target.value as CognitiveLoad)}
+            className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none ${itemClasses}`}
+          >
+            <option value="Quick">Quick (≤5m)</option>
+            <option value="Easy">Easy (20-30m)</option>
+            <option value="Flow State">Flow State (Deep Focus)</option>
+            <option value="Personal">Personal</option>
+          </select>
+        </div>
 
             <div className="grid grid-cols-2 gap-3 pt-2">
               <label className="flex items-center gap-2 text-sm cursor-pointer">
