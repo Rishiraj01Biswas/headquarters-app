@@ -1,3 +1,4 @@
+import { ProjectModal } from "./components/ProjectModal";
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from './store/useAppStore';
 import { 
@@ -864,46 +865,15 @@ export default function App() {
         </div>
       )}
 
-      {/* Project Zoom-in Modal */}
-      {activeProjectModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className={`border rounded-xl p-6 w-full max-w-lg space-y-5 ${cardClasses}`}>
-            <div className="flex justify-between items-start border-b pb-3 border-neutral-200 dark:border-neutral-800">
-              <div>
-                <span className="text-[10px] font-mono text-indigo-600 uppercase tracking-wider">{activeProjectModal.bucket}</span>
-                <h3 className="text-xl font-bold">{activeProjectModal.title}</h3>
-              </div>
-              <button onClick={() => setActiveProjectModal(null)} className="text-neutral-400 hover:text-neutral-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider mb-2 text-neutral-400">Focused Project Tasks</h4>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {tasks.filter(t => t.projectId === activeProjectModal.id).length === 0 ? (
-                  <p className="text-xs text-neutral-400 italic">No tasks linked directly to this project.</p>
-                ) : (
-                  tasks.filter(t => t.projectId === activeProjectModal.id).map(t => (
-                    <div key={t.id} className={`p-2.5 rounded-lg border flex justify-between items-center text-xs ${itemClasses}`}>
-                      <span className={t.completed ? 'line-through text-neutral-400' : ''}>{t.title}</span>
-                      <button onClick={() => toggleTask(t.id)}>
-                        {t.completed ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Circle className="w-4 h-4 text-neutral-400" />}
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-3">
-              <button onClick={() => setActiveProjectModal(null)} className="px-4 py-2 text-xs bg-neutral-900 text-white rounded-lg font-medium">
-                Close Project View
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Project Modal (Edit / Delete / Create) */}
+      <ProjectModal
+        isOpen={Boolean(activeProjectModal || showNewProjectModal)}
+        projectToEdit={activeProjectModal}
+        onClose={() => {
+          setActiveProjectModal(null);
+          setShowNewProjectModal(false);
+        }}
+      />
 
       {/* New Project Modal */}
       {showNewProjectModal && (
