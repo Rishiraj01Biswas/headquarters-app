@@ -4,7 +4,7 @@ import {
   CheckCircle2, Circle, Flame, Target, Calendar as CalendarIcon, 
   Users, Trash2, Play, Square, Plus, BookOpen, 
   X, Check, AlertTriangle, TrendingUp, Clock, Filter, Layers, Zap,
-  FileText, ArrowRight, FolderPlus, Sun, Moon, ChevronLeft, ChevronRight,
+  FileText, ArrowRight, FolderPlus, Sun, Download, Upload, Moon, ChevronLeft, ChevronRight,
   History, Compass
 } from 'lucide-react';
 import type { LifeBucket, Project, EisenhowerQuadrant } from './types';
@@ -260,6 +260,54 @@ export default function App() {
             )}
           </button>
           
+          {/* Backup & Restore Controls */}
+          <div className="flex items-center gap-1 border-r pr-2.5 mr-0.5 border-neutral-700/30">
+            <button
+              onClick={() => useAppStore.getState().exportData()}
+              className={`p-2 rounded-lg border transition-all ${
+                isDarkMode 
+                  ? 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:text-emerald-400' 
+                  : 'bg-white border-neutral-200 text-neutral-600 hover:text-emerald-600 shadow-sm'
+              }`}
+              title="Backup Workspace (Export JSON)"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+
+            <label
+              className={`p-2 rounded-lg border cursor-pointer transition-all ${
+                isDarkMode 
+                  ? 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:text-sky-400' 
+                  : 'bg-white border-neutral-200 text-neutral-600 hover:text-sky-600 shadow-sm'
+              }`}
+              title="Restore Workspace (Import JSON)"
+            >
+              <Upload className="w-4 h-4" />
+              <input
+                type="file"
+                accept=".json"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = (event) => {
+                    const text = event.target?.result as string;
+                    if (text) {
+                      const success = useAppStore.getState().importData(text);
+                      if (success) {
+                        alert("Workspace restored successfully!");
+                      } else {
+                        alert("Invalid backup file format.");
+                      }
+                    }
+                  };
+                  reader.readAsText(file);
+                }}
+              />
+            </label>
+          </div>
+
           <button 
             onClick={() => setShowModal(true)}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-md shadow-indigo-600/20"

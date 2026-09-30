@@ -11,9 +11,13 @@ interface AppState {
   deleteTask: (id: string) => void;
   moveTaskQuadrant: (id: string, quadrant: EisenhowerQuadrant) => void;
   logTime: (id: string, minutes: number) => void;
-  addProject: (title: string, bucket: Project['bucket']) => void;
+  addProject: (title: string, bucket: Project['bucket'], bottlenecks?: string[], notes?: string[]) => void;
+  updateProject: (id: string, updatedFields: Partial<Omit<Project, 'id'>>) => void;
+  deleteProject: (id: string) => void;
   addNote: (title: string, content: string, bucket: Note['bucket']) => void;
   deleteNote: (id: string) => void;
+  exportData: () => void;
+  importData: (jsonData: string) => boolean;
 }
 
 const resolveQuadrant = (isUrgent: boolean, isImportant: boolean): EisenhowerQuadrant => {
@@ -25,7 +29,7 @@ const resolveQuadrant = (isUrgent: boolean, isImportant: boolean): EisenhowerQua
 
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       tasks: [
         {
           id: '1',
@@ -59,7 +63,7 @@ export const useAppStore = create<AppState>()(
           bucket: 'Career',
           status: 'In Progress',
           bottlenecks: ['Portfolio review pending'],
-          notes: ['Target remote roles or Tier-1 tech hubs']
+          notes: ['Target remote roles or Tier-1 tech hubs'],
         },
       ],
       notes: [
@@ -68,8 +72,8 @@ export const useAppStore = create<AppState>()(
           title: 'System Architecture Checklist',
           content: 'Clean decoupled components with typed stores and local storage fallback.',
           bucket: 'Career',
-          createdAt: new Date().toISOString()
-        }
+          createdAt: new Date().toISOString(),
+        },
       ],
       addTask: (newTask) =>
         set((state) => ({
@@ -113,12 +117,29 @@ export const useAppStore = create<AppState>()(
             t.id === id ? { ...t, timeSpentMinutes: (t.timeSpentMinutes || 0) + minutes } : t
           ),
         })),
-      addProject: (title, bucket) =>
+      addProject: (title, bucket, bottlenecks = [], notes = []) =>
         set((state) => ({
           projects: [
             ...state.projects,
-            { id: Date.now().toString(), title, bucket, status: 'In Progress', bottlenecks: [], notes: [] },
+            {
+              id: Date.now().toString(),
+              title,
+              bucket,
+              status: 'In Progress',
+              bottlenecks,
+              notes,
+            },
           ],
+        })),
+      updateProject: (id, updatedFields) =>
+        set((state) => ({
+          projects: state.projects.map((p) =>
+            p.id === id ? { ...p, ...updatedFields } : p
+          ),
+        })),
+      deleteProject: (id) =>
+        set((state) => ({
+          projects: state.projects.filter((p) => p.id !== id),
         })),
       addNote: (title, content, bucket) =>
         set((state) => ({
@@ -131,6 +152,39 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           notes: state.notes.filter((n) => n.id !== id),
         })),
+      exportData: () => {
+        const state = get();
+        const exportObject = {
+          version: '1.0',
+          exportedAt: new Date().toISOString(),
+          tasks: state.tasks,
+          projects: state.projects,
+          notes: state.notes,
+        };
+        const blob = new Blob([JSON.stringify(exportObject, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `headquarters-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      importData: (jsonData: string) => {
+        try {
+          const parsed = JSON.parse(jsonData);
+          if (Array.isArray(parsed.tasks) && Array.isArray(parsed.projects)) {
+            set({
+              tasks: parsed.tasks,
+              projects: parsed.projects,
+              notes: Array.isArray(parsed.notes) ? parsed.notes : [],
+            });
+            return true;
+          }
+          return false;
+        } catch {
+          return false;
+        }
+      },
     }),
     {
       name: 'headquarters-storage',
