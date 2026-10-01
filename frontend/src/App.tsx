@@ -777,14 +777,14 @@ export default function App() {
               <div className="flex items-baseline justify-between">
                 <p className="text-3xl font-mono text-emerald-600 font-bold tracking-tight">
                   {timerMode === 'pomodoro'
-                    ? `${Math.floor(Math.max(0, 1500 - secondsElapsed) / 60)}:${(Math.max(0, 1500 - secondsElapsed) % 60).toString().padStart(2, '0')}`
+                    ? `${Math.floor(Math.max(0, 3600 - secondsElapsed) / 60)}:${(Math.max(0, 3600 - secondsElapsed) % 60).toString().padStart(2, '0')}`
                     : timerMode === 'break'
                     ? `${Math.floor(Math.max(0, 300 - secondsElapsed) / 60)}:${(Math.max(0, 300 - secondsElapsed) % 60).toString().padStart(2, '0')}`
                     : `${Math.floor(secondsElapsed / 60)}:${(secondsElapsed % 60).toString().padStart(2, '0')}`}
                 </p>
                 {timerMode === 'pomodoro' && (
                   <span className="text-[11px] text-neutral-400 font-mono">
-                    {Math.min(100, Math.round((secondsElapsed / 1500) * 100))}%
+                    {Math.min(100, Math.round((secondsElapsed / 3600) * 100))}%
                   </span>
                 )}
               </div>
@@ -793,7 +793,7 @@ export default function App() {
                 <div className="w-full bg-neutral-200 dark:bg-neutral-700 h-1.5 rounded-full mt-2 overflow-hidden">
                   <div
                     className="bg-emerald-500 h-full transition-all duration-300"
-                    style={{ width: `${Math.min(100, (secondsElapsed / 1500) * 100)}%` }}
+                    style={{ width: `${Math.min(100, (secondsElapsed / 3600) * 100)}%` }}
                   />
                 </div>
               )}
