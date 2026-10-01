@@ -1,11 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Task, Project, Note, EisenhowerQuadrant } from '../types';
+import type { Task, Project, Note, FocusSession, EisenhowerQuadrant } from '../types';
 
 interface AppState {
   tasks: Task[];
   projects: Project[];
   notes: Note[];
+  focusSessions: FocusSession[];
+  logFocusSession: (session: Omit<FocusSession, 'id'>) => void;
   addTask: (task: Omit<Task, 'id' | 'quadrant' | 'completed' | 'timeSpentMinutes'>) => void;
   toggleTask: (id: string) => void;
   deleteTask: (id: string) => void;
@@ -31,7 +33,8 @@ const resolveQuadrant = (isUrgent: boolean, isImportant: boolean): EisenhowerQua
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
-      tasks: [
+      focusSessions: [],
+  tasks: [
         {
           id: '1',
           title: 'Batch Make 10 Social Posts',
@@ -116,7 +119,14 @@ export const useAppStore = create<AppState>()(
               : t
           ),
         })),
-      logTime: (id, minutes) =>
+      logFocusSession: (session) =>
+    set((state) => ({
+      focusSessions: [
+        ...state.focusSessions,
+        { ...session, id: Date.now().toString() },
+      ],
+    })),
+  logTime: (id, minutes) =>
         set((state) => ({
           tasks: state.tasks.map((t) =>
             t.id === id ? { ...t, timeSpentMinutes: (t.timeSpentMinutes || 0) + minutes } : t

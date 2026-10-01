@@ -48,3 +48,13 @@ export interface Note {
   bucket: LifeBucket;
   createdAt: string;
 }
+
+export interface FocusSession {
+  id: string;
+  taskId?: string;
+  taskTitle: string;
+  durationMinutes: number;
+  timestamp: string; // ISO date
+  cognitiveLoad?: CognitiveLoad;
+  movesTheNeedle?: boolean;
+}

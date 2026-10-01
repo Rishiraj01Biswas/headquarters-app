@@ -6,7 +6,7 @@ import {
   Circle, Flame, Calendar as CalendarIcon, 
   Trash2, Square, Plus, BookOpen, 
   X, Check, AlertTriangle, TrendingUp, Clock, Filter, Layers, Zap,
-  FileText, ArrowRight, FolderPlus, Sun, Download, Upload, Moon, ChevronLeft, ChevronRight,
+  FileText, ArrowRight, FolderPlus, Sun, Download, Upload, Moon, ChevronLeft, ChevronRight, Play, Pause, Sparkles, Target,
   History, Compass
 } from 'lucide-react';
 import type { LifeBucket, CognitiveLoad, Project } from './types';
@@ -20,10 +20,21 @@ const BUCKETS: (LifeBucket | 'All')[] = ['All', 'Career', 'Health', 'Personal', 
 const STATES_OF_MIND = ['Deep Work', 'Flow State', 'Admin / Logistics', 'Creative & Research', 'Recovery / Low Energy'];
 
 export default function App() {
-  const { 
-    tasks, projects, notes, toggleTask, addTask, deleteTask,
-    updateTask, 
-    logTime, addProject, addNote, deleteNote, moveTaskQuadrant 
+  const {
+    tasks,
+    projects,
+    notes,
+    toggleTask,
+    addTask,
+    deleteTask,
+    updateTask,
+    logTime,
+    logFocusSession,
+    focusSessions,
+    addProject,
+    addNote,
+    deleteNote,
+    moveTaskQuadrant,
   } = useAppStore();
   
   // Theme state
@@ -43,10 +54,13 @@ export default function App() {
   // Timer state
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [secondsElapsed, setSecondsElapsed] = useState(0);
+  const [timerMode, setTimerMode] = useState<'stopwatch' | 'pomodoro' | 'break'>('stopwatch');
+  const [isTimerPaused, setIsTimerPaused] = useState(false);
 
   // Modals & Panels
   const [showModal, setShowModal] = useState(false);
   const [showReview, setShowReview] = useState(false);
+  const [showHistoryDrawer, setShowHistoryDrawer] = useState(false);
   const [showNotesDrawer, setShowNotesDrawer] = useState(false);
   const [activeProjectModal, setActiveProjectModal] = useState<Project | null>(null);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
@@ -99,25 +113,92 @@ export default function App() {
     setStateOfMindMap(prev => ({ ...prev, [activeDateKey]: newFlow }));
   };
 
+  // Web Audio chime generator
+  const playChime = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15); // A5
+
+      gain.gain.setValueAtTime(0.18, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.8);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.8);
+    } catch {
+      // AudioContext unavailable or blocked by browser autoplay policy
+    }
+  };
+
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
-    if (activeTaskId) {
+    const isRunning = (activeTaskId || timerMode === "break") && !isTimerPaused;
+
+    if (isRunning) {
       interval = setInterval(() => {
-        setSecondsElapsed((prev) => prev + 1);
+        setSecondsElapsed((prev) => {
+          // Check Pomodoro Sprint Completion (25 min)
+          if (timerMode === "pomodoro" && prev + 1 >= 1500) {
+            playChime();
+            if (activeTaskId) {
+              const currentTask = tasks.find((t) => t.id === activeTaskId);
+              logTime(activeTaskId, 25);
+              logFocusSession({
+                taskId: activeTaskId,
+                taskTitle: currentTask?.title || "Focus Session",
+                durationMinutes: 25,
+                timestamp: new Date().toISOString(),
+                cognitiveLoad: currentTask?.cognitiveLoad,
+                movesTheNeedle: currentTask?.movesTheNeedle || currentTask?.isFrog,
+              });
+            }
+            setTimerMode("break");
+            return 0;
+          }
+
+          // Check Break Completion (5 min)
+          if (timerMode === "break" && prev + 1 >= 300) {
+            playChime();
+            setTimerMode("pomodoro");
+            setActiveTaskId(null);
+            return 0;
+          }
+
+          return prev + 1;
+        });
       }, 1000);
     }
+
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [activeTaskId]);
+  }, [activeTaskId, isTimerPaused, timerMode, tasks, logTime, logFocusSession]);
 
   const handleStopTimer = () => {
-    if (activeTaskId && secondsElapsed > 0) {
+    if (activeTaskId && secondsElapsed > 0 && timerMode !== "break") {
       const minutes = Math.max(1, Math.round(secondsElapsed / 60));
+      const currentTask = tasks.find((t) => t.id === activeTaskId);
       logTime(activeTaskId, minutes);
+      logFocusSession({
+        taskId: activeTaskId,
+        taskTitle: currentTask?.title || "Focus Session",
+        durationMinutes: minutes,
+        timestamp: new Date().toISOString(),
+        cognitiveLoad: currentTask?.cognitiveLoad,
+        movesTheNeedle: currentTask?.movesTheNeedle || currentTask?.isFrog,
+      });
     }
     setActiveTaskId(null);
     setSecondsElapsed(0);
+    setIsTimerPaused(false);
+    if (timerMode === "break") setTimerMode("stopwatch");
   };
 
   const handleCreateTask = (e: React.FormEvent) => {
@@ -624,47 +705,149 @@ export default function App() {
             )}
           </section>
 
-          <section className={`border rounded-xl p-5 ${cardClasses}`}>
-            <h2 className="font-semibold mb-3 text-sm flex items-center gap-2">
-              <Clock className="w-4 h-4 text-emerald-600" /> Focus Tracker
-            </h2>
-            {activeTaskId ? (
-              <div className={`flex items-center justify-between p-3 rounded-lg border mb-4 ${itemClasses}`}>
+        <section className={`border rounded-xl p-5 ${cardClasses}`}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <h2 className="font-semibold text-sm flex items-center gap-2">
+                <Clock className="w-4 h-4 text-emerald-600" /> Focus Tracker
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowHistoryDrawer(true)}
+                title="View Session History & Cognitive Breakdown"
+                className="p-1 rounded-md text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+              >
+                <History className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="flex items-center gap-1 bg-neutral-200/60 dark:bg-neutral-800 p-0.5 rounded-lg text-[10px]">
+              <button
+                type="button"
+                onClick={() => setTimerMode('stopwatch')}
+                className={`px-2 py-0.5 rounded transition-colors ${timerMode === 'stopwatch' ? 'bg-white dark:bg-neutral-700 font-semibold shadow-xs text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
+              >
+                Flow
+              </button>
+              <button
+                type="button"
+                onClick={() => setTimerMode('pomodoro')}
+                className={`px-2 py-0.5 rounded transition-colors ${timerMode === 'pomodoro' ? 'bg-white dark:bg-neutral-700 font-semibold shadow-xs text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
+              >
+                25m Sprint
+              </button>
+              {timerMode === 'break' && (
+                <span className="px-2 py-0.5 rounded bg-emerald-500 text-white font-semibold shadow-xs">
+                  5m Break
+                </span>
+              )}
+            </div>
+          </div>
+
+          {activeTaskId ? (
+            <div className={`p-3 rounded-lg border mb-4 ${itemClasses}`}>
+              <div className="flex items-center justify-between mb-2">
                 <div className="truncate mr-2">
-                  <p className="text-xs text-neutral-500 truncate">
-                    {tasks.find(t => t.id === activeTaskId)?.title || 'Tracking...'}
-                  </p>
-                  <p className="text-2xl font-mono text-emerald-600 font-bold">
-                    {Math.floor(secondsElapsed / 60)}:{(secondsElapsed % 60).toString().padStart(2, '0')}
+                  <span className="text-[10px] uppercase font-semibold text-emerald-600 tracking-wider">
+                    {timerMode === 'pomodoro' ? 'Deep Sprint' : 'Active Flow'}
+                  </span>
+                  <p className="text-xs font-medium text-neutral-800 dark:text-neutral-200 truncate">
+                    {tasks.find(t => t.id === activeTaskId)?.title || 'Active Session'}
                   </p>
                 </div>
-                <button 
-                  onClick={handleStopTimer}
-                  className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-lg"
-                  title="Stop & Log Time"
-                >
-                  <Square className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsTimerPaused(!isTimerPaused)}
+                    className="p-1.5 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300"
+                    title={isTimerPaused ? 'Resume' : 'Pause'}
+                  >
+                    {isTimerPaused ? <Play className="w-3.5 h-3.5 fill-current" /> : <Pause className="w-3.5 h-3.5" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleStopTimer}
+                    className="p-1.5 bg-red-500/10 text-red-500 hover:bg-red-500/20 rounded-lg"
+                    title="Stop & Log Time"
+                  >
+                    <Square className="w-3.5 h-3.5 fill-current" />
+                  </button>
+                </div>
               </div>
-            ) : (
-              <p className="text-neutral-400 text-xs mb-4">Click play on any task to log focus minutes.</p>
-            )}
 
-            <div className="border-t border-neutral-200 dark:border-neutral-800 pt-3">
-              <div className="flex justify-between text-xs text-neutral-500 mb-2">
-                <span>Total Time Logged</span>
-                <span className="font-mono font-bold text-emerald-600">{totalMinutesTracked}m</span>
+              <div className="flex items-baseline justify-between">
+                <p className="text-3xl font-mono text-emerald-600 font-bold tracking-tight">
+                  {timerMode === 'pomodoro'
+                    ? `${Math.floor(Math.max(0, 1500 - secondsElapsed) / 60)}:${(Math.max(0, 1500 - secondsElapsed) % 60).toString().padStart(2, '0')}`
+                    : timerMode === 'break'
+                    ? `${Math.floor(Math.max(0, 300 - secondsElapsed) / 60)}:${(Math.max(0, 300 - secondsElapsed) % 60).toString().padStart(2, '0')}`
+                    : `${Math.floor(secondsElapsed / 60)}:${(secondsElapsed % 60).toString().padStart(2, '0')}`}
+                </p>
+                {timerMode === 'pomodoro' && (
+                  <span className="text-[11px] text-neutral-400 font-mono">
+                    {Math.min(100, Math.round((secondsElapsed / 1500) * 100))}%
+                  </span>
+                )}
               </div>
-              <div className="space-y-1.5">
-                {minutesByBucket.map(item => (
-                  <div key={item.bucket} className="text-[11px] flex justify-between text-neutral-500">
-                    <span>{item.bucket}</span>
-                    <span className="font-mono text-neutral-700 dark:text-neutral-300 font-medium">{item.minutes}m</span>
-                  </div>
-                ))}
-              </div>
+
+              {timerMode === 'pomodoro' && (
+                <div className="w-full bg-neutral-200 dark:bg-neutral-700 h-1.5 rounded-full mt-2 overflow-hidden">
+                  <div
+                    className="bg-emerald-500 h-full transition-all duration-300"
+                    style={{ width: `${Math.min(100, (secondsElapsed / 1500) * 100)}%` }}
+                  />
+                </div>
+              )}
             </div>
-          </section>
+          ) : (
+            <div className="text-center py-4 border border-dashed border-neutral-300 dark:border-neutral-800 rounded-lg mb-4">
+              <Clock className="w-5 h-5 mx-auto text-neutral-400 mb-1 opacity-60" />
+              <p className="text-neutral-400 text-xs">Press play on any task to initiate focus HUD.</p>
+            </div>
+          )}
+
+          {/* Telemetry & Leverage Section */}
+          <div className="border-t border-neutral-200 dark:border-neutral-800 pt-3 space-y-2">
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-neutral-500 flex items-center gap-1">
+                <Target className="w-3.5 h-3.5 text-amber-500" /> 80/20 Leverage
+              </span>
+              <span className="font-mono font-bold text-amber-600">
+                {(() => {
+                  const needleMinutes = tasks.filter(t => t.movesTheNeedle || t.isFrog).reduce((acc, t) => acc + (t.timeSpentMinutes || 0), 0);
+                  const total = tasks.reduce((acc, t) => acc + (t.timeSpentMinutes || 0), 0);
+                  return total > 0 ? Math.round((needleMinutes / total) * 100) : 0;
+                })()}%
+              </span>
+            </div>
+
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-neutral-500 flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5 text-purple-500" /> Flow State Ratio
+              </span>
+              <span className="font-mono font-bold text-purple-600">
+                {(() => {
+                  const flowMinutes = tasks.filter(t => t.cognitiveLoad === 'Flow State').reduce((acc, t) => acc + (t.timeSpentMinutes || 0), 0);
+                  const total = tasks.reduce((acc, t) => acc + (t.timeSpentMinutes || 0), 0);
+                  return total > 0 ? Math.round((flowMinutes / total) * 100) : 0;
+                })()}%
+              </span>
+            </div>
+
+            <div className="flex justify-between items-center text-xs pt-1 border-t border-neutral-100 dark:border-neutral-800/60">
+              <span className="text-neutral-500">Total Minutes</span>
+              <span className="font-mono font-bold text-emerald-600">{totalMinutesTracked}m</span>
+            </div>
+
+            <div className="pt-2 space-y-1">
+              {minutesByBucket.filter(b => b.minutes > 0).map(item => (
+                <div key={item.bucket} className="text-[11px] flex justify-between text-neutral-500">
+                  <span>{item.bucket}</span>
+                  <span className="font-mono text-neutral-700 dark:text-neutral-300 font-medium">{item.minutes}m</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
         </div>
 
         {/* Right Columns: Smart Task Engine */}
@@ -741,6 +924,115 @@ export default function App() {
         </div>
       )}
 
+      {/* Slide-over Focus Session History Drawer */}
+      {showHistoryDrawer && (
+        <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-sm flex justify-end">
+          <div className={`w-full max-w-md border-l h-full p-6 overflow-y-auto space-y-6 flex flex-col justify-between ${isDarkMode ? "bg-neutral-900 border-neutral-800" : "bg-white border-neutral-200"}`}>
+            <div className="space-y-6">
+              <div className="flex items-center justify-between border-b pb-4 border-neutral-200 dark:border-neutral-800">
+                <div className="flex items-center gap-2 font-semibold text-lg">
+                  <History className="w-5 h-5 text-emerald-500" /> Session History & Flow
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowHistoryDrawer(false)}
+                  className="p-1 rounded-lg text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Cognitive Load Telemetry Summary */}
+              <div className={`p-4 rounded-xl border space-y-3 ${cardClasses}`}>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Cognitive Load Distribution</h3>
+                {(() => {
+                  const sessions = focusSessions || [];
+                  const totalLoggedMinutes = sessions.reduce((acc, s) => acc + (s.durationMinutes || 0), 0);
+                  const flowMins = sessions.filter(s => s.cognitiveLoad === "Flow State").reduce((acc, s) => acc + (s.durationMinutes || 0), 0);
+                  const quickMins = sessions.filter(s => s.cognitiveLoad === "Quick").reduce((acc, s) => acc + (s.durationMinutes || 0), 0);
+                  const easyMins = sessions.filter(s => s.cognitiveLoad === "Easy").reduce((acc, s) => acc + (s.durationMinutes || 0), 0);
+                  const personalMins = sessions.filter(s => s.cognitiveLoad === "Personal").reduce((acc, s) => acc + (s.durationMinutes || 0), 0);
+                  const needleMins = sessions.filter(s => s.movesTheNeedle).reduce((acc, s) => acc + s.durationMinutes, 0);
+
+                  const flowPct = totalLoggedMinutes > 0 ? Math.round((flowMins / totalLoggedMinutes) * 100) : 0;
+                  const needlePct = totalLoggedMinutes > 0 ? Math.round((needleMins / totalLoggedMinutes) * 100) : 0;
+
+                  return (
+                    <div className="space-y-2 text-xs">
+                      <div className="flex justify-between items-center">
+                        <span className="text-neutral-500 flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-purple-500" /> Flow Ratio</span>
+                        <span className="font-mono font-bold text-purple-600">{flowPct}% ({flowMins}m)</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-neutral-500 flex items-center gap-1.5"><Target className="w-3.5 h-3.5 text-amber-500" /> 80/20 Needle Share</span>
+                        <span className="font-mono font-bold text-amber-600">{needlePct}% ({needleMins}m)</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-1 border-t border-neutral-100 dark:border-neutral-800">
+                        <span className="text-neutral-500">Quick: <strong className="font-mono text-neutral-700 dark:text-neutral-300">{quickMins}m</strong></span>
+                        <span className="text-neutral-500">Easy: <strong className="font-mono text-neutral-700 dark:text-neutral-300">{easyMins}m</strong></span>
+                        <span className="text-neutral-500">Personal: <strong className="font-mono text-neutral-700 dark:text-neutral-300">{personalMins}m</strong></span>
+                        <span className="text-neutral-500">Total: <strong className="font-mono text-emerald-600">{totalLoggedMinutes}m</strong></span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Chronological Session Feed */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Logged Sessions ({focusSessions?.length || 0})</h3>
+                {(!focusSessions || focusSessions.length === 0) ? (
+                  <div className="text-center py-8 border border-dashed border-neutral-300 dark:border-neutral-800 rounded-xl">
+                    <Clock className="w-6 h-6 mx-auto text-neutral-400 mb-2 opacity-60" />
+                    <p className="text-xs text-neutral-400">No focus sessions recorded yet.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {[...focusSessions].reverse().map((session, idx) => (
+                      <div key={session.timestamp + idx} className={`p-3 rounded-lg border flex items-center justify-between text-xs ${itemClasses}`}>
+                        <div className="truncate mr-3 space-y-0.5">
+                          <p className="font-medium text-neutral-800 dark:text-neutral-200 truncate">{session.taskTitle}</p>
+                          <div className="flex items-center gap-2 text-[10px] text-neutral-400">
+                            <span>{new Date(session.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                            {session.cognitiveLoad && (
+                              <span className={`px-1.5 py-0.2 rounded font-medium ${
+                                session.cognitiveLoad === "Flow State"
+                                  ? "bg-purple-500/10 text-purple-600"
+                                  : session.cognitiveLoad === "Quick"
+                                  ? "bg-amber-500/10 text-amber-600"
+                                  : session.cognitiveLoad === "Easy"
+                                  ? "bg-emerald-500/10 text-emerald-600"
+                                  : "bg-blue-500/10 text-blue-600"
+                              }`}>
+                                {session.cognitiveLoad}
+                              </span>
+                            )}
+                            {session.movesTheNeedle && (
+                              <span className="px-1.5 py-0.2 rounded font-medium bg-amber-500/10 text-amber-600">
+                                80/20
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="font-mono font-bold text-emerald-600 whitespace-nowrap">{session.durationMinutes}m</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowHistoryDrawer(false)}
+              className="w-full py-2 bg-neutral-900 dark:bg-neutral-800 text-white rounded-lg text-xs font-medium hover:bg-neutral-800 dark:hover:bg-neutral-700 transition-colors"
+            >
+              Close History
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Slide-over Dynamic Review Drawer */}
       {showReview && (
         <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-sm flex justify-end">
@@ -757,6 +1049,47 @@ export default function App() {
 
               <div>
                 <h3 className="text-xs font-semibold uppercase tracking-wider mb-3 text-neutral-400">
+            {/* Daily Focus & Cognitive Telemetry */}
+            <div className={`p-4 rounded-xl border space-y-3 ${cardClasses}`}>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Focus Telemetry</h3>
+                <span className="text-[10px] font-mono text-neutral-400">
+                  {focusSessions?.length || 0} sprint{(focusSessions?.length || 0) === 1 ? "" : "s"}
+                </span>
+              </div>
+              {(() => {
+                const sessions = focusSessions || [];
+                const totalLoggedMinutes = sessions.reduce((acc, s) => acc + (s.durationMinutes || 0), 0);
+                const flowMins = sessions.filter(s => s.cognitiveLoad === "Flow State").reduce((acc, s) => acc + (s.durationMinutes || 0), 0);
+                const quickMins = sessions.filter(s => s.cognitiveLoad === "Quick").reduce((acc, s) => acc + (s.durationMinutes || 0), 0);
+                const easyMins = sessions.filter(s => s.cognitiveLoad === "Easy").reduce((acc, s) => acc + (s.durationMinutes || 0), 0);
+                const personalMins = sessions.filter(s => s.cognitiveLoad === "Personal").reduce((acc, s) => acc + (s.durationMinutes || 0), 0);
+                const needleMins = sessions.filter(s => s.movesTheNeedle).reduce((acc, s) => acc + (s.durationMinutes || 0), 0);
+
+                const flowPct = totalLoggedMinutes > 0 ? Math.round((flowMins / totalLoggedMinutes) * 100) : 0;
+                const needlePct = totalLoggedMinutes > 0 ? Math.round((needleMins / totalLoggedMinutes) * 100) : 0;
+
+                return (
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between items-center">
+                      <span className="text-neutral-500 flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-purple-500" /> Flow Leverage</span>
+                      <span className="font-mono font-bold text-purple-600">{flowPct}% ({flowMins}m)</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-neutral-500 flex items-center gap-1.5"><Target className="w-3.5 h-3.5 text-amber-500" /> 80/20 Leverage</span>
+                      <span className="font-mono font-bold text-amber-600">{needlePct}% ({needleMins}m)</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-neutral-100 dark:border-neutral-800 text-[11px]">
+                      <span className="text-neutral-400">Quick: <strong className="font-mono text-neutral-600 dark:text-neutral-300">{quickMins}m</strong></span>
+                      <span className="text-neutral-400">Easy: <strong className="font-mono text-neutral-600 dark:text-neutral-300">{easyMins}m</strong></span>
+                      <span className="text-neutral-400">Personal: <strong className="font-mono text-neutral-600 dark:text-neutral-300">{personalMins}m</strong></span>
+                      <span className="text-neutral-400">Total: <strong className="font-mono text-emerald-600">{totalLoggedMinutes}m</strong></span>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
                   Embedded Completed Tasks ({completedTasks.length})
                 </h3>
                 {completedTasks.length === 0 ? (
