@@ -144,16 +144,16 @@ export default function App() {
     if (isRunning) {
       interval = setInterval(() => {
         setSecondsElapsed((prev) => {
-          // Check Pomodoro Sprint Completion (25 min)
-          if (timerMode === "pomodoro" && prev + 1 >= 1500) {
+          // Check Pomodoro Sprint Completion (1 hr)
+      if (timerMode === "pomodoro" && prev + 1 >= 3600) {
             playChime();
             if (activeTaskId) {
               const currentTask = tasks.find((t) => t.id === activeTaskId);
-              logTime(activeTaskId, 25);
+              logTime(activeTaskId, 60);
               logFocusSession({
                 taskId: activeTaskId,
                 taskTitle: currentTask?.title || "Focus Session",
-                durationMinutes: 25,
+                durationMinutes: 60,
                 timestamp: new Date().toISOString(),
                 cognitiveLoad: currentTask?.cognitiveLoad,
                 movesTheNeedle: currentTask?.movesTheNeedle || currentTask?.isFrog,
