@@ -733,7 +733,7 @@ export default function App() {
                 onClick={() => setTimerMode('pomodoro')}
                 className={`px-2 py-0.5 rounded transition-colors ${timerMode === 'pomodoro' ? 'bg-white dark:bg-neutral-700 font-semibold shadow-xs text-neutral-900 dark:text-white' : 'text-neutral-500'}`}
               >
-                25m Sprint
+                1h Sprint
               </button>
               {timerMode === 'break' && (
                 <span className="px-2 py-0.5 rounded bg-emerald-500 text-white font-semibold shadow-xs">
